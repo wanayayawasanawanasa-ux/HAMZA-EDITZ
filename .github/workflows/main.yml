@@ -1,19 +1,32 @@
 name: RDP
 on:
   workflow_dispatch:
+
 jobs:
   secure-rdp:
     runs-on: windows-latest
     timeout-minutes: 3600
     steps:
-      - name: Configure Core RDP Settings
+      - name: Enable RDP
         run: |
-          # Enable Remote Desktop and disable Network Level Authentication
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0 -Force
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 0 -Force
-          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "SecurityLayer" -Value 0 -Force
-          # Remove any existing rule with the same name
-          netsh advfirewall firewall delete rule name="RDP-Port"
-          # For testing, allow any incoming connection on RDP localport=3389
-          netsh advfirewall firewall add rule name="RDP-Port" dir=in action=allow protocol=TCP localport=3389
-          # (Optional) Restart the Remote Desktop service
+          netsh advfirewall firewall set rule group="remote desktop" new enable=Yes
+
+      - name: Expose via Tailscale
+        uses: tailscale/github-action@v2
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+          args: "--ssh"
+
+      - name: Get Connection Info
+        run: |
+          $ip = (Invoke-RestMethod -Uri "https://api.ipify.org?format=json").ip
+          Write-Host "=== RDP ACCESS ==="
+          Write-Host "Address: $ip"
+          Write-Host "Username: runneradmin"
+          Write-Host "=================="
+
+      - name: Keep Alive
+        run: Start-Sleep -Seconds 3600
